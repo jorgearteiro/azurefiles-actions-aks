@@ -6,5 +6,6 @@ jobs:
   Explore-GitHub-Actions:
     # You need to use the INSTALLATION_NAME from the previous step
     runs-on: arc-runner-set
+    container: node:18
     steps:
     - run: echo "🎉 This job uses runner scale set runners!"
