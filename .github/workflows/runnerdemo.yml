@@ -1,10 +1,27 @@
-name: Actions Runner Controller Demo
+name: Actions Runner on AKS
 on:
-  workflow_dispatch:
+  push:
+    branches:
+        - aksrunner
+  workflow_dispatch: {}
 
 jobs:
-  Explore-GitHub-Actions:
-    # You need to use the INSTALLATION_NAME from the previous step
+  build:
     runs-on: arc-runner-set
+    env:
+      DOTNET_INSTALL_DIR: "./.dotnet"        
     steps:
-    - run: echo "🎉 This job uses runner scale set runners!"
+        - uses: actions/checkout@v4
+        - name: Install cURL Headers
+          run: |
+            sudo apt-get update
+            sudo apt-get -y install curl            
+        - name: list nuget packages
+          run: ls ~/.nuget/packages/
+          shell: bash            
+        - name: Setup .NET
+          uses: actions/setup-dotnet@v4
+          with:
+            dotnet-version: '8.0.x'
+        - name: Build .NET app
+          run: dotnet build azurefiles-actions-aks.sln
