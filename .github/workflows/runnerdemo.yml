@@ -9,7 +9,7 @@ jobs:
   build:
     runs-on: arc-runner-set
     env:
-      DOTNET_INSTALL_DIR: "./.dotnet"        
+      DOTNET_INSTALL_DIR: "~/.dotnet"        
     steps:
         - uses: actions/checkout@v4
         - name: Install cURL Headers
