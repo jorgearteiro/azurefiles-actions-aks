@@ -1,8 +1,5 @@
 name: Actions Runner on AKS
 on:
-#  push:
-#    branches:
-#        - aksrunner
   workflow_dispatch: {
     inputs: {
       arc_runner_set_name: {
@@ -33,6 +30,5 @@ jobs:
           uses: actions/setup-dotnet@v4
           with:
             dotnet-version: '8.0.x'
-            cache: true
         - name: Restore .NET app
-          run: dotnet restore --locked-mode azurefiles-actions-aks.csproj
+          run: dotnet restore
