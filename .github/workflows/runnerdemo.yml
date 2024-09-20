@@ -14,7 +14,7 @@ jobs:
   build:
     runs-on: ${{ inputs.arc_runner_set_name}}
     env:
-      DOTNET_INSTALL_DIR: "~/.dotnet"
+      DOTNET_INSTALL_DIR: "./.dotnet"
       #DOTNET_INSTALL_DIR: "${{ github.workspace }}/.dotnet"      
       #NUGET_PACKAGES: "${{ github.workspace }}/.nuget/packages"  
     steps:
@@ -31,4 +31,4 @@ jobs:
           with:
             dotnet-version: '8.0.x'
         - name: Restore .NET app
-          run: dotnet restore
+          run: dotnet build azurefiles-actions-aks.csproj
