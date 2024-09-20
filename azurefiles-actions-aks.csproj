@@ -8,7 +8,7 @@
     <AssemblyName>$(AssemblyName.Replace(' ', '_'))</AssemblyName>
   </PropertyGroup>
 
-<ItemGroup>
+<!-- <ItemGroup>
     <PackageReference Include="Azure.AI.OpenAI" Version="2.0.0-beta.5" />
     <PackageReference Include="OpenAI" Version="2.0.0-beta.11" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
@@ -55,7 +55,7 @@
     <PackageReference Include="Azure.Monitor.OpenTelemetry.Exporter" Version="1.0.0" />
     <PackageReference Include="Azure.AI.FormRecognizer" Version="4.1.0" />
     <PackageReference Include="Azure.AI.Translation.Document" Version="1.0.0" />    
-</ItemGroup>
+</ItemGroup> -->
 
 
 
