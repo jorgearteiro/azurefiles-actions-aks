@@ -1,7 +1,3 @@
-using Newtonsoft;
-using Dapper;
-using Polly;
-
 using azurefiles_actions_aks.Components;
 
 var builder = WebApplication.CreateBuilder(args);
