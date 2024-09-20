@@ -8,8 +8,9 @@ on:
 jobs:
   build:
     runs-on: arc-runner-set
-    #env:
-    #  DOTNET_INSTALL_DIR: "/home/runner/_work/.dotnet"        
+    env:
+      DOTNET_INSTALL_DIR: "${{ github.workspace }}/.dotnet"      
+      NUGET_PACKAGES: "${{ github.workspace }}/.nuget/packages"  
     steps:
         - uses: actions/checkout@v4
         - name: Install cURL Headers
