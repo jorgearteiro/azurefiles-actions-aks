@@ -15,7 +15,7 @@ jobs:
     runs-on: ${{ inputs.arc_runner_set_name}}
     env:
       DOTNET_INSTALL_DIR: "./.dotnet"
-      NUGET_PACKAGES: "~/_work/.nuget/packages"
+      NUGET_PACKAGES: "/home/runner/_work/.nuget/packages"
       #DOTNET_INSTALL_DIR: "${{ github.workspace }}/.dotnet"      
       #NUGET_PACKAGES: "${{ github.workspace }}/.nuget/packages"  
     steps:
