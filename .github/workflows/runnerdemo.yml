@@ -15,7 +15,7 @@ jobs:
     runs-on: ${{ inputs.arc_runner_set_name}}
     env:
       DOTNET_INSTALL_DIR: "./.dotnet"
-      NUGET_PACKAGES: "/home/runner/_work/.nuget/packages"
+      #NUGET_PACKAGES: "/home/runner/_work/.nuget/packages"
       #DOTNET_INSTALL_DIR: "${{ github.workspace }}/.dotnet"      
       #NUGET_PACKAGES: "${{ github.workspace }}/.nuget/packages"  
     steps:
@@ -25,11 +25,11 @@ jobs:
             sudo apt-get update
             sudo apt-get -y install curl            
         - name: list nuget packages
-          run: ls ~/_work/.nuget/packages/
+          run: ls ~/.nuget/packages/
           shell: bash            
         - name: Setup .NET
           uses: actions/setup-dotnet@v4
           with:
             dotnet-version: '8.0.x'
-        - name: Restore .NET app
+        - name: Build .NET app
           run: dotnet build azurefiles-actions-aks.csproj
