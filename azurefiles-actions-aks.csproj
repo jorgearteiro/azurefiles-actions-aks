@@ -8,8 +8,11 @@
     <AssemblyName>$(AssemblyName.Replace(' ', '_'))</AssemblyName>
   </PropertyGroup>
 
-<!-- <ItemGroup>
-    <PackageReference Include="Azure.AI.OpenAI" Version="2.0.0-beta.5" />
+<ItemGroup>
+    <PackageReference Include="Polly" Version="8.4.1" />
+</ItemGroup>
+
+    <!-- <PackageReference Include="Azure.AI.OpenAI" Version="2.0.0-beta.5" />
     <PackageReference Include="OpenAI" Version="2.0.0-beta.11" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.0" />
@@ -22,7 +25,6 @@
     <PackageReference Include="FluentValidation" Version="11.10.0" />
     <PackageReference Include="MediatR" Version="12.4.1" />
     <PackageReference Include="NLog" Version="5.3.4" />
-    <PackageReference Include="Polly" Version="8.4.1" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.7.3" />
     <PackageReference Include="xunit" Version="2.9.0" />
     <PackageReference Include="xunit.abstractions" Version="2.0.3" />
