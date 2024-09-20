@@ -1,0 +1,25 @@
+name: Container test
+on:
+  workflow_dispatch: {
+    inputs: {
+      arc_runner_set_name: {
+        description: 'The name of the Arc Runner Set',
+        required: true,
+        default: 'arc-runner-set-1'
+      }
+    }
+  }
+
+jobs:
+  build:
+    runs-on: ${{ inputs.arc_runner_set_name}}
+    container:
+      image: busybox
+
+    steps:
+        - name: Checkout code
+          uses: actions/checkout@v4
+
+        - name: test
+          run: ls -la
+          shell: bash
