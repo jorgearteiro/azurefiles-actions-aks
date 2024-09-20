@@ -1,16 +1,25 @@
 name: Actions Runner on AKS
 on:
-  push:
-    branches:
-        - aksrunner
-  workflow_dispatch: {}
+#  push:
+#    branches:
+#        - aksrunner
+  workflow_dispatch: {
+    inputs: {
+      arc_runner_set_name: {
+        description: 'The name of the Arc Runner Set',
+        required: true,
+        default: 'arc-runner-set'
+      }
+    }
+  }
 
 jobs:
   build:
-    runs-on: arc-runner-set
+    runs-on: ${{ inputs.arc_runner_set_name}}
     env:
-      DOTNET_INSTALL_DIR: "${{ github.workspace }}/.dotnet"      
-      ##NUGET_PACKAGES: "${{ github.workspace }}/.nuget/packages"  
+      DOTNET_INSTALL_DIR: "~/.dotnet"
+      #DOTNET_INSTALL_DIR: "${{ github.workspace }}/.dotnet"      
+      #NUGET_PACKAGES: "${{ github.workspace }}/.nuget/packages"  
     steps:
         - uses: actions/checkout@v4
         - name: Install cURL Headers
@@ -25,4 +34,4 @@ jobs:
           with:
             dotnet-version: '8.0.x'
         - name: Build .NET app
-          run: dotnet build azurefiles-actions-aks.sln
+          run: dotnet build azurefiles-actions-aks.csproj
