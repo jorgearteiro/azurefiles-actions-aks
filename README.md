@@ -206,13 +206,14 @@ To instal the Helm Chart on AKS, please run "helm install" command on your AKS C
 helm install "${ARC_RUNNER_SCALESET_NAME}" \
     --namespace "${NAMESPACE_ARC_RUNNERS}" \
     --create-namespace \
+    --values arc-runners-set-values.yaml \
     --set githubConfigUrl="${GITHUB_CONFIG_URL}" \
     --set githubConfigSecret="${ARC_RUNNER_GITHUB_SECRET_NAME}" \
-    --set minRunners=1 \ 
+    --set minRunners=1 \
     --set maxRunners=5 \
     --set runnerGroup=default \
-    --values ./install/arc-runners-set-values.yaml \
     oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set
+
 ```
 
 If you want to upgrade any configuration on the Arc Runner Scaleset, re-run the last helm install command onyl replacing the firt line to "helm upgrade --install".
@@ -221,12 +222,12 @@ If you want to upgrade any configuration on the Arc Runner Scaleset, re-run the 
 helm upgrade --install "${ARC_RUNNER_SCALESET_NAME}" \
     --namespace "${NAMESPACE_ARC_RUNNERS}" \
     --create-namespace \
+    --values arc-runners-set-values.yaml \
     --set githubConfigUrl="${GITHUB_CONFIG_URL}" \
     --set githubConfigSecret="${ARC_RUNNER_GITHUB_SECRET_NAME}" \
-    --set minRunners=1 \ 
+    --set minRunners=1 \
     --set maxRunners=5 \
     --set runnerGroup=default \
-    --values ./install/arc-runners-set-values.yaml \
     oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set
 ```
 
