@@ -8,6 +8,8 @@
     <AssemblyName>$(AssemblyName.Replace(' ', '_'))</AssemblyName>
   </PropertyGroup>
 
+<!-- These PackageReference are only to test Azure Files as caching layer to your 
+     GitHub Actions Self-Hosted Runner on Azure Kubernetes Service (AKS) -->
 <ItemGroup>
     <PackageReference Include="Azure.AI.OpenAI" Version="2.0.0-beta.5" />
     <PackageReference Include="OpenAI" Version="2.0.0-beta.11" />

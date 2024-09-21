@@ -1,4 +1,4 @@
-name: Actions Runner on AKS Container
+name: Actions Runner on AKS - Container
 on:
   workflow_dispatch: {
     inputs: {

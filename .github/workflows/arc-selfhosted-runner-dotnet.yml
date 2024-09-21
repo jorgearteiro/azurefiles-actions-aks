@@ -1,9 +1,9 @@
-name: Actions Runner on AKS
+name: Actions Runner on AKS - .NET Build
 on:
   workflow_dispatch: {
     inputs: {
       arc_runner_set_name: {
-        description: 'The name of the Arc Runner Set',
+        description: 'The name of the self-hosted Arc Runner Set',
         required: true,
         default: 'arc-runner-set'
       }
@@ -16,17 +16,24 @@ jobs:
     env:
       DOTNET_INSTALL_DIR: "./.dotnet"
     steps:
-        - uses: actions/checkout@v4
+        - name: Checkout code
+          uses: actions/checkout@v4
+
         - name: Install cURL Headers
           run: |
             sudo apt-get update
-            sudo apt-get -y install curl            
-        # - name: list nuget packages
-        #   run: ls ~/.nuget/packages/
-        #   shell: bash            
+            sudo apt-get -y install curl   
+
         - name: Setup .NET
           uses: actions/setup-dotnet@v4
           with:
             dotnet-version: '8.0.x'
+
+        - name: Restore .NET app
+          run: dotnet restore
+
         - name: Build .NET app
-          run: dotnet build azurefiles-actions-aks.csproj
+          run: dotnet build --configuration Release --no-restore
+          
+        - name: Publish .NET app
+          run: dotnet publish --configuration Release --no-restore --output ~/publish  
