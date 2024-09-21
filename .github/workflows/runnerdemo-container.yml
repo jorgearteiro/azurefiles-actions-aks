@@ -1,11 +1,11 @@
-name: Actions Runner on AKS Container
+name: Actions Runner on AKS - Container
 on:
   workflow_dispatch: {
     inputs: {
       arc_runner_set_name: {
         description: 'The name of the Arc Runner Set',
         required: true,
-        default: 'arc-runner-set-1'
+        default: 'arc-runner-set'
       }
     }
   }
@@ -16,11 +16,6 @@ jobs:
     container:
       image: mcr.microsoft.com/dotnet/sdk:8.0
 
-    # env:
-    #   DOTNET_INSTALL_DIR: "./.dotnet"
-    #   NUGET_PACKAGES: "/home/runner/_work/.nuget/packages"
-      #DOTNET_INSTALL_DIR: "${{ github.workspace }}/.dotnet"      
-      #NUGET_PACKAGES: "${{ github.workspace }}/.nuget/packages"  
     steps:
         - name: Checkout code
           uses: actions/checkout@v4

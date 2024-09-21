@@ -5,7 +5,7 @@ on:
       arc_runner_set_name: {
         description: 'The name of the Arc Runner Set',
         required: true,
-        default: 'arc-runner-set-1'
+        default: 'arc-runner-set'
       }
     }
   }
