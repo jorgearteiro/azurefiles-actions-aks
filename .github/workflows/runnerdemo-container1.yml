@@ -14,7 +14,7 @@ on:
 jobs:
   test-job:
     runs-on: ${{ inputs.arc_runner_set_name}}
-    container: busybox
+    container: ubuntu
     steps:
       - name: test
         run: |
