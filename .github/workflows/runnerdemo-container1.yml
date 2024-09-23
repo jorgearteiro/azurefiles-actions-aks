@@ -1,4 +1,5 @@
 name: Container test
+run-name: Run Container test workflow on ${{ inputs.arc_runner_set_name}}
 on:
   workflow_dispatch: {
     inputs: {
@@ -11,14 +12,17 @@ on:
   }
 
 jobs:
-  build:
+  test-job:
     runs-on: ${{ inputs.arc_runner_set_name}}
-    container:
-      image: busybox
-
+    container: busybox
     steps:
-        # - name: Checkout code
-        #   uses: actions/checkout@v4
-
-        - name: test
-          run: ls -la
+      - name: test
+        run: |
+          echo "Hello, world!" >> $GITHUB_STEP_SUMMARY
+          sleep 60
+    services:
+      redis:
+        image: redis
+        ports:
+          - 6379/tcp
+        options: --health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 3
