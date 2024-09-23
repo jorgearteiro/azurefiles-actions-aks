@@ -1,4 +1,5 @@
-name: Actions Runner on AKS - Container
+name: Actions Runner on AKS - .NET Build using containers
+run-name: Run AKS .NET Build - Containers workflow on ${{ inputs.arc_runner_set_name}}
 on:
   workflow_dispatch: {
     inputs: {
@@ -19,10 +20,6 @@ jobs:
     steps:
         - name: Checkout code
           uses: actions/checkout@v4
-
-        - name: list nuget packages
-          run: ls ~/.nuget/packages/
-          shell: bash            
 
         - name: Restore .NET app
           run: dotnet restore
