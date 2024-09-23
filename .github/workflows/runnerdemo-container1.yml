@@ -19,7 +19,7 @@ jobs:
       - name: test
         run: |
           echo "Hello, world!" >> $GITHUB_STEP_SUMMARY
-          sleep 60
+          sleep 360
     services:
       redis:
         image: redis
