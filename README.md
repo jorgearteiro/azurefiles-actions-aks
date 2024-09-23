@@ -1,25 +1,27 @@
-# Using Azure Files with GitHub Actions and Kubernetes
-Learn how to install GitHub ARC - Actions Runner Controller and ARC Runner Scale sets on AKS - Azure Kubernetes Services to manage and scale your self-hosted github runners.
+# Using Azure Files share with GitHub Actions and Kubernetes Tutorial
 
-## Before you begin
+On this tutorial, you can learn how to use Azure File share to enable caching and dynamic volume creation in your GitHub pipelines when using Self Hosted Agents running on Kubernetes. We are using GitHub ARC - Actions Runner Controller and ARC Runner Scale sets on AKS - Azure Kubernetes Services to manage and scale your self-hosted github runners.
 
-Please follow the [Quickstart: Deploy an Azure Kubernetes Services (AKS) cluster using Azure CLI](https://learn.microsoft.com/en-us/azure/aks/learn/quick-kubernetes-deploy-cli) to create the required Azure Kubernetes Services. We are using 3 CLI tools: az CLI, Kubectl and Helm
+Learn more here about [GitHub ARC](https://docs.github.com/en/actions/hosting-your-own-runners/managing-self-hosted-runners-with-actions-runner-controller/about-actions-runner-controller) and [Azure File share](https://learn.microsoft.com/en-us/azure/aks/azure-files-csi) running on Kubernetes.
+
+
+
+## Pre-requisites
+
+We are using 3 CLI tools: Azure CLI, Kubectl and Helm. If you are running in CloudShell, these tools are already available there for you.
+
+* Install [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli-windows?tabs=azure-cli#install-or-update)
+* Install [Kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl-windows/#install-kubectl-binary-with-curl-on-windows)
+* Install [Helm](https://helm.sh/docs/intro/install/)
 
 ## Defining parameters
 
 Make sure to replace the following mandatory placeholders :
 
-* `STORAGE_ACCOUNT_RG` with the name of the resource group that the storage account should be created
-* `STORAGE_ACCOUNT_NAME` with the name of the storage account
+* `STORAGE_ACCOUNT_RG` with the name of the resource group of the storage account to be created
+* `STORAGE_ACCOUNT_NAME` with the name of the storage account to be created
 * `STORAGE_ACCOUNT_LOCATION` with the name of the region to create the resource in. It should be the same region as the AKS cluster nodes to facilitate performance and cost.
 * `GITHUB_CONFIG_URL` the URL to GitHub organisation or repository
-
-```bash
-STORAGE_ACCOUNT_RG="metadata-agroves"
-STORAGE_ACCOUNT_NAME="metadatacaching11"
-STORAGE_ACCOUNT_LOCATION="uswest3"
-GITHUB_CONFIG_URL="https://github.com/jorgearteiro/azurefiles-actions-aks"
-```
 
 and these are optional, please keep these default values if possible :
 
@@ -30,12 +32,55 @@ and these are optional, please keep these default values if possible :
 * `ARC_RUNNER_GITHUB_SECRET_NAME` the name of GITHUB secret
 
 ```bash
+# please fill these env variables with your details
+STORAGE_ACCOUNT_RG="metadata-agroves"
+STORAGE_ACCOUNT_NAME="metadatacaching11"
+STORAGE_ACCOUNT_LOCATION="uswest3"
+GITHUB_CONFIG_URL="https://github.com/jorgearteiro/azurefiles-actions-aks"
+
+# optional, changes maybe require aditional chnages on ./install/*.yaml files
 NAMESPACE_ARC_CONTROLLER="arc-systems"
-ARC_CONTROLLER_NAME="arc-controler"
+ARC_CONTROLLER_NAME="arc-controller"
 NAMESPACE_ARC_RUNNERS="arc-runners"
 ARC_RUNNER_SCALESET_NAME="arc-runner-set"
 ARC_RUNNER_GITHUB_SECRET_NAME="arc-runner-github-secret"
 ```
+
+## Create AKS - Azure Kubernetes Services Cluster
+
+Please follow the [Quickstart: Deploy an Azure Kubernetes Services (AKS) cluster using Azure CLI](https://learn.microsoft.com/en-us/azure/aks/learn/quick-kubernetes-deploy-cli) to create the required Azure Kubernetes Services. 
+
+The following instructions are the minimum required to create a AKS Cluster:
+
+* `AKS_RESOURCE_GROUP` with the name of the AKS - Azure Kubernetes Services resource group to be created
+* `AKS_CLUSTER_NAME` with the name of the AKS - Azure Kubernetes Services cluster to be created
+* `AKS_LOCATION` with the name of the region to create the resource in. It should be the same region as the Azure File Storage Account to facilitate performance and cost.
+
+```bash
+AKS_RESOURCE_GROUP="aks-actions"
+AKS_CLUSTER_NAME="aks-actions"
+AKS_LOCATION="uswest3"
+az group create --name ${AZURE_RESOURCE_GROUP} --location ${AKS_LOCATION}
+az aks create -g ${AKS_RESOURCE_GROUP} -n ${AKS_CLUSTER_NAME} \
+       --os-sku AzureLinux \
+       --node-count 1 \
+       --node-vm-size standard_d4s_v5 \
+       --max-pods=100 \
+       --generate-ssh-keys
+```
+To manage a Kubernetes cluster, use the Kubernetes command-line client, [kubectl][kubectl]. `kubectl` is already installed if you use Azure Cloud Shell. To install `kubectl` locally, use the `az aks install-cli` command.
+
+1. Configure `kubectl` to connect to your Kubernetes cluster using the `az aks get-credentials` command. This command downloads credentials and configures the Kubernetes CLI to use them.
+
+    ```bash
+    az aks get-credentials -g ${AKS_RESOURCE_GROUP} -n ${AKS_CLUSTER_NAME}
+    ```
+
+1. Verify the connection to your cluster using the `kubectl get` command. This command returns a list of the cluster nodes.
+
+    ```bash
+    kubectl get nodes
+    ```
 
 ## Create an Azure file share
 
@@ -131,64 +176,81 @@ s9uqYckJaMLIY6J2lRmodK9ybknmIJt/ji5R1ugBqF9hlW429tSnJg==
 '
 ```
 
-## Create Azure Files PV - Presistent Volume and PVC - Persistent Volume Claim
+## Azure File share configurations
 
-Azure Files fileshare can be mounted in multiple pods, we can use this capability called AcccessMode: ReadWriteMany to mount the same fileshare in all pods created by the Arc kubernetes replicateset.
+Azure Files fileshare can be mounted in multiple pods at same time. We can use this capability called AcccessMode: ReadWriteMany to mount the same fileshare in all pods created by the Arc kubernetes replicateset.
 
-Please manually customize [`arc-runners-set-pv.yaml`](./install/arc-runners-set-pv.yaml) and [`arc-runners-set-pvc.yaml`](./install/arc-runners-set-pvc.yaml) on the install folder, before running these kubectl apply commands. The required customizations are `volumeAttributes` as described here and also any `namespaces` parameter on both PV and PVC files.
-```yaml
-volumeAttributes:
-  resourceGroup: metadata-agroves  # optional, only set this when storage account is not in the same RG group as node
-  shareName: metadatacaching
-```
+We are going to use Azure Files share in 2 different ways:
 
-After [`arc-runners-set-pv.yaml`](./install/arc-runners-set-pv.yaml) and [`arc-runners-set-pvc.yaml`](./install/arc-runners-set-pvc.yaml) files customzations are complete, please apply the manifests:
+1. As a persistent SMB File share to cache Nuget packages used by our .NET example Application. The [`arc-runners-set-pv-pvc.yaml`](./install/arc-runners-set-pv.yaml) file will create the required PV and PVC for this File Share. We recomend Azure File Premium for this first option.
+Please customize `volumeAttributes` and any `namespaces` parameter on both PV - Persistent Volume and PVC - Persistent volume claim manifests as showed here:
 
-```bash
-kubectl apply -f ./install/arc-runners-set-pv.yaml --wait
-kubectl apply -f ./install/arc-runners-set-pvc.yaml --wait
-```
+    ```yaml
+    volumeAttributes:
+      resourceGroup: metadata-agroves  # optional, only set this when storage account is not in the same RG group as node
+      shareName: metadatacaching
+    nodeStageSecretRef:
+      name: azure-storage-secret
+      namespace: arc-runners      
+    ```
+
+    ```bash
+    # Create PV and PVC on your cluster
+    kubectl apply -f ./install/arc-runners-set-pv-pvc.yaml --namespace "${NAMESPACE_ARC_RUNNERS}" --wait
+    ```
+
+2. As Ephemeral volume for the GitHub Runners _work folder. We are also going to create 2 storage classes - Azure Files Standard called `github-azurefile` and Azure File Premium called `github-azurefile-premium`. These classes will allow volumes to be created and deleted on demand. When a GitHub Jobs runs, a new runner pod will be created on Kubernetes and a new Azure File share will be created and mounted. The volume will live only during the job run. Standard class allows any volume size and Premium allows a minimum of 100Gb volume. Only one will be used and the decision is yours. Premium will give you a better performance.
+The [`arc-runners-storage-class-files.yaml`](./install/arc-runners-storage-class-files.yaml) file can be customized, but not required.
+
+    ```bash
+    kubectl apply -f ./install/arc-runners-storage-class-files.yaml --wait
+    ```
 
 ## Installing ARC Runner Scale Set
 
-Install ARC Runner Scale Set using the official GitHub Helm chart and manually mounting your Azure Files share on Kubernetes
+Install ARC Runner Scale Set using the official GitHub Helm chart and manually mount your Azure Files share on Kubernetes
 
-This is a code snippet from the [`arc-runners-set-values.yaml`](./install/arc-runners-set-values.yaml) file on the Install folder. We are using a customized version the `Kubernetes` containerMode, to include AzureFile volume mounting. The other helm parameters will be set on the helm install command using --set option.
+This is a code snippet from the [`arc-runners-set-values.yaml`](./install/arc-runners-set-values.yaml) file on the Install folder that can be customized before installing the Runner set Helm Chart. We are using a customized version the `Kubernetes` containerMode, to include Azure File share volume mountings to Nuget packages and to ephemeral _work folder volume. The only recommended changes are:
+
+* `storageClassName` choose between "github-azurefile-premium" and "github-azurefile"
+* `storage` choose the size of the storage. 100Gb minimum to premium.
+
+The other helm parameters will be set on the helm install command using --set option.
 
 ```yaml
+containerMode:
+  type: "kubernetes"  ## type can be set to dind or kubernetes
+  ## the following is required when containerMode.type=kubernetes
+  kubernetesModeWorkVolumeClaim:
+    accessModes: ["ReadWriteMany"]
+    storageClassName: "github-azurefile-premium" # or "github-azurefile" for Standard_LRS
+    resources:
+      requests:
+        storage: 100Gi # 100Gi minimum to premium or any size when using Standard_LRS "github-azurefile" storage class
+
 template:
   spec:
-    securityContext:
-      FSGroup: 1001
-    containers:
-    - name: runner
-      image: ghcr.io/actions/actions-runner:latest
-      command: ["/home/runner/run.sh"]
-      env:
-        - name: ACTIONS_RUNNER_CONTAINER_HOOKS
-          value: /home/runner/k8s/index.js
-        - name: ACTIONS_RUNNER_POD_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.name
-        - name: ACTIONS_RUNNER_REQUIRE_JOB_CONTAINER
-          value: "false"         
-      volumeMounts:
-        - name: work
-          mountPath: /home/runner/_work
-        - name: azurefile
-          mountPath: /home/runner/.nuget/             
-    volumes:
-      - name: work
-        emptyDir: {}
+  securityContext:
+    fsGroup: 123 # Group used by GitHub default agent image
+  containers:
+  - name: runner
+    image: ghcr.io/actions/actions-runner:latest
+    command: ["/home/runner/run.sh"]
+    env:
+      - name: ACTIONS_RUNNER_REQUIRE_JOB_CONTAINER
+        value: "false"
+    volumeMounts:
       - name: azurefile
-        persistentVolumeClaim:
-          claimName: azurefile                     
+        mountPath: /home/runner/.nuget/             
+  volumes:
+    - name: azurefile
+      persistentVolumeClaim:
+        claimName: azurefile
 ```
 
 ### ARC Runner Scaleset Helm Chart Parameters
 
-The Arc Runner Scaleset Helm Chart provides a few parameters, these are the most important ones to install a Scaleset with AzureFile volume mount on AKS - Azure Kubernetes Services.
+The Arc Runner Scaleset Helm Chart provides a few parameters, these are the most important ones to install a Scaleset with Azure File share volume mount on AKS - Azure Kubernetes Services.
 
 These are the parameters:
 
@@ -206,15 +268,16 @@ To instal the Helm Chart on AKS, please run "helm install" command on your AKS C
 helm install "${ARC_RUNNER_SCALESET_NAME}" \
     --namespace "${NAMESPACE_ARC_RUNNERS}" \
     --create-namespace \
-    --values arc-runners-set-values.yaml \
+    --values ./install/arc-runners-set-values.yaml \
     --set githubConfigUrl="${GITHUB_CONFIG_URL}" \
     --set githubConfigSecret="${ARC_RUNNER_GITHUB_SECRET_NAME}" \
-    --set minRunners=1 \
+    --set minRunners=2 \
     --set maxRunners=5 \
     --set runnerGroup=default \
     oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set
-
 ```
+
+### Upgrading a Runner scale set installation
 
 If you want to upgrade any configuration on the Arc Runner Scaleset, re-run the last helm install command onyl replacing the firt line to "helm upgrade --install".
 
@@ -222,10 +285,10 @@ If you want to upgrade any configuration on the Arc Runner Scaleset, re-run the 
 helm upgrade --install "${ARC_RUNNER_SCALESET_NAME}" \
     --namespace "${NAMESPACE_ARC_RUNNERS}" \
     --create-namespace \
-    --values arc-runners-set-values.yaml \
+    --values ./install/arc-runners-set-values.yaml \
     --set githubConfigUrl="${GITHUB_CONFIG_URL}" \
     --set githubConfigSecret="${ARC_RUNNER_GITHUB_SECRET_NAME}" \
-    --set minRunners=1 \
+    --set minRunners=2 \
     --set maxRunners=5 \
     --set runnerGroup=default \
     oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set
@@ -233,40 +296,28 @@ helm upgrade --install "${ARC_RUNNER_SCALESET_NAME}" \
 
 ## Removing resources
 
-### Deleting ARC Runner Scalesets created on your Kubernetes Cluster
+If you want to remove all resources created on your AKS - Azure Kubernetes Cluster, run these commands.
 
 ```bash
+# Deleting ARC Runner Scalesets
 helm delete "${ARC_RUNNER_SCALESET_NAME}" -n "${NAMESPACE_ARC_RUNNERS}" --wait
-```
 
-### Deleting ARC Runners Scaleset Controler
-
-```bash
+# Deleting ARC Runners Scaleset Controler
 helm delete "${ARC_CONTROLLER_NAME}" -n "${NAMESPACE_ARC_CONTROLLER}" --wait
-```
 
-### Deleting PV and PVC
+# Delete Azure File share configurations
+kubectl delete -f ./install/arc-runners-set-pv-pvc.yaml --wait
+kubectl delete -f ./install/arc-runners-storage-class-files.yaml --wait
 
-```bash
-kubectl delete -f ./install/arc-runners-set-pv.yaml --wait
-kubectl delete -f ./install/arc-runners-set-pvc.yaml --wait
-```
+# Delete Azure File share Storage key secret
+kubectl delete secret azure-storage-secret -n arc-runners --wait
 
-### Deleting Secrets
+# Delete GitHub App Connection Secret
+kubectl delete secret ${ARC_RUNNER_GITHUB_SECRET_NAME} -n arc-runners --wait
 
-```bash
-kubectl delete secret generic azure-storage-secret 
-```
-
-### Deleting Namespaces
-
-```bash
-kubectl delete namespace ${NAMESPACE_ARC_CONTROLLER}
+# Deleting Namespaces
 kubectl delete namespace ${NAMESPACE_ARC_RUNNERS}
+kubectl delete namespace ${NAMESPACE_ARC_CONTROLLER}
 ```
 
-### Deleting Github Actions App Secret
-
-```bash
-kubectl delete secret generic ${ARC_RUNNER_GITHUB_SECRET_NAME} 
-```
+If you don't plan on going through this guideline, clean up unnecessary resources to avoid Azure charges. Remove the resource group, AKS container service, Azure File share and all related resources.

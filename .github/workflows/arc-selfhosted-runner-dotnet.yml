@@ -1,4 +1,5 @@
 name: Actions Runner on AKS - .NET Build
+run-name: Run AKS .NET Build workflow on ${{ inputs.arc_runner_set_name}}
 on:
   workflow_dispatch: {
     inputs: {
