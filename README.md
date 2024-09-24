@@ -2,6 +2,8 @@
 
 On this tutorial, you can learn how to use Azure File share to enable caching and dynamic volume creation in your GitHub pipelines when using Self Hosted Agents running on Kubernetes. We are using GitHub ARC - Actions Runner Controller and ARC Runner Scale sets on AKS - Azure Kubernetes Services to manage and scale your self-hosted github runners.
 
+![Solution Architecture](./docs/images/Tutorial_Solution_Architecture.png)
+
 Learn more here about [GitHub ARC](https://docs.github.com/en/actions/hosting-your-own-runners/managing-self-hosted-runners-with-actions-runner-controller/about-actions-runner-controller) and [Azure File share](https://learn.microsoft.com/en-us/azure/aks/azure-files-csi) running on Kubernetes.
 
 
