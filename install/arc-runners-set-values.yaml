@@ -197,10 +197,18 @@ template:
          env:
            - name: ACTIONS_RUNNER_REQUIRE_JOB_CONTAINER
              value: "false"
+           - name: ACTIONS_RUNNER_CONTAINER_HOOK_TEMPLATE
+             value: "/home/runner/container-config/container-podspec.yaml"
          volumeMounts:
+           - name: "container-podspec-volume"
+             mountPath: "/home/runner/container-config"
+             readOnly: true             
            - name: azurefile
-             mountPath: /home/runner/.nuget/             
+             mountPath: "/home/runner/.nuget/"
        volumes:
+         - name: "container-podspec-volume"
+           configMap:
+             name: hook-extension
          - name: azurefile
            persistentVolumeClaim:
              claimName: azurefile

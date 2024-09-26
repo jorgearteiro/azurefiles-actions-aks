@@ -12,7 +12,7 @@ on:
   }
 
 jobs:
-  build:
+  build-with-container:
     runs-on: ${{ inputs.arc_runner_set_name}}
     env:
       DOTNET_INSTALL_DIR: "./.dotnet"

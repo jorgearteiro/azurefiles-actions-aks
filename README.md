@@ -37,7 +37,7 @@ and these are optional, please keep these default values if possible :
 # please fill these env variables with your details
 STORAGE_ACCOUNT_RG="metadata-agroves"
 STORAGE_ACCOUNT_NAME="metadatacaching11"
-STORAGE_ACCOUNT_LOCATION="uswest3"
+STORAGE_ACCOUNT_LOCATION="westus3"
 GITHUB_CONFIG_URL="https://github.com/jorgearteiro/azurefiles-actions-aks"
 
 # optional, changes maybe require aditional chnages on ./install/*.yaml files
@@ -61,13 +61,18 @@ The following instructions are the minimum required to create a AKS Cluster:
 ```bash
 AKS_RESOURCE_GROUP="aks-actions"
 AKS_CLUSTER_NAME="aks-actions"
-AKS_LOCATION="uswest3"
+AKS_LOCATION="westus3"
 az group create --name ${AZURE_RESOURCE_GROUP} --location ${AKS_LOCATION}
 az aks create -g ${AKS_RESOURCE_GROUP} -n ${AKS_CLUSTER_NAME} \
        --os-sku AzureLinux \
        --node-count 1 \
+       --enable-cluster-autoscaler \
+       --min-count 1 \
+       --max-count 3 \       
        --node-vm-size standard_d4s_v5 \
        --max-pods=100 \
+       --network-plugin azure \
+       --network-plugin-mode overlay \
        --generate-ssh-keys
 ```
 To manage a Kubernetes cluster, use the Kubernetes command-line client, [kubectl][kubectl]. `kubectl` is already installed if you use Azure Cloud Shell. To install `kubectl` locally, use the `az aks install-cli` command.
@@ -112,8 +117,11 @@ Before you can use an Azure Files file share as a Kubernetes volume, you must cr
 helm install "${ARC_CONTROLLER_NAME}" \
     --namespace "${NAMESPACE_ARC_CONTROLLER}" \
     --create-namespace \
+    --version "0.9.3" \
     oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set-controller
 ```
+
+Please remove the `--version "0.9.3"` parameter to install the latest version. The Arc runner-set need to have the same version of the Arc controler.
 
 ## Creating Kubernetes Secrets
 
@@ -212,7 +220,11 @@ The [`arc-runners-storage-class-files.yaml`](./install/arc-runners-storage-class
 
 Install ARC Runner Scale Set using the official GitHub Helm chart and manually mount your Azure Files share on Kubernetes
 
-This is a code snippet from the [`arc-runners-set-values.yaml`](./install/arc-runners-set-values.yaml) file on the Install folder that can be customized before installing the Runner set Helm Chart. We are using a customized version the `Kubernetes` containerMode, to include Azure File share volume mountings to Nuget packages and to ephemeral _work folder volume. The only recommended changes are:
+This is a code snippet from the [`arc-runners-set-values.yaml`](./install/arc-runners-set-values.yaml) file on the Install folder that can be customized before installing the Runner set Helm Chart. 
+
+We are using a customized version the `Kubernetes` containerMode, to include Azure File share volume mountings to Nuget packages and to ephemeral _work folder volume.
+
+The only not mandantory changes are:
 
 * `storageClassName` choose between "github-azurefile-premium" and "github-azurefile"
 * `storage` choose the size of the storage. 100Gb minimum to premium.
@@ -241,16 +253,31 @@ template:
     env:
       - name: ACTIONS_RUNNER_REQUIRE_JOB_CONTAINER
         value: "false"
+      - name: ACTIONS_RUNNER_CONTAINER_HOOK_TEMPLATE
+        value: "/home/runner/container-config/container-podspec.yaml"
     volumeMounts:
+      - name: "container-podspec-volume"
+        mountPath: "/home/runner/container-config"
       - name: azurefile
         mountPath: /home/runner/.nuget/             
   volumes:
+    - name: "container-podspec-volume"
+      configMap:
+        name: hook-extension
     - name: azurefile
       persistentVolumeClaim:
         claimName: azurefile
 ```
 
+For compatibility with GitHub Workflow container feature that allows you to run containers inside your pipeline, we are mounting a `container-podspec-volume` with the pod spec for the workflow pod created by ARC when running workflows with the container feature. This pod spec is mounted from a config map created on `arc-runners-set-container-pod-spec.yaml` file on the install folder. No changes are required.
+
+```bash
+kubectl apply -f .install/arc-runners-set-container-pod-spec.yaml
+```
+
 ### ARC Runner Scaleset Helm Chart Parameters
+
+kubectl apply -f ./install/arc-runners-set-container-pod-spec.yaml
 
 The Arc Runner Scaleset Helm Chart provides a few parameters, these are the most important ones to install a Scaleset with Azure File share volume mount on AKS - Azure Kubernetes Services.
 
@@ -273,11 +300,14 @@ helm install "${ARC_RUNNER_SCALESET_NAME}" \
     --values ./install/arc-runners-set-values.yaml \
     --set githubConfigUrl="${GITHUB_CONFIG_URL}" \
     --set githubConfigSecret="${ARC_RUNNER_GITHUB_SECRET_NAME}" \
-    --set minRunners=2 \
-    --set maxRunners=5 \
+    --set minRunners=1 \
+    --set maxRunners=3 \
     --set runnerGroup=default \
+    --version "0.9.3" \
     oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set
 ```
+
+Please remove the `--version "0.9.3"` parameter to install the latest version. The Arc runner-set need to have the same version of the Arc controler.
 
 ### Upgrading a Runner scale set installation
 
@@ -290,11 +320,26 @@ helm upgrade --install "${ARC_RUNNER_SCALESET_NAME}" \
     --values ./install/arc-runners-set-values.yaml \
     --set githubConfigUrl="${GITHUB_CONFIG_URL}" \
     --set githubConfigSecret="${ARC_RUNNER_GITHUB_SECRET_NAME}" \
-    --set minRunners=2 \
-    --set maxRunners=5 \
+    --set minRunners=1 \
+    --set maxRunners=3 \
     --set runnerGroup=default \
+    --version "0.9.3"
     oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set
 ```
+
+Please remove the `--version "0.9.3"` parameter to install the latest version. The Arc runner-set need to have the same version of the Arc controler.
+
+## Running your Workflows - GitHub Actions
+
+I have created 3 workflows on this repository for you to test the self-hosted ARC runners created on AKS.
+
+* `dotnet-using-container.yml` install .NET SDK and restore/build/publish application on the runner itself.
+* `dotnet-wihout-container.yml` use workflow container feature to run a .NET SDK container and build inside the application inside the container. NUGET Caching is mounted by default on this container.
+* `workflow-container-service-test.yml` testing workflows also using containers feature to create a ubuntu container and a redis service. Both containers run on the same AKS Pod. NUGET Caching is also mounted by default on this container.
+
+All 3 workflows have an input parameter for the Arc runner name to be used on the `runs-on:` field of your workflow. This is the `ARC_RUNNER_SCALESET_NAME="arc-runner-set"` variable defined before, called `arc-runner-set`. To facilitate testing, we are using `workflow_dispatch:` option on the 3 workflows to only run those workflows when it is requested manually. On GitHub Actions tab of your repository, select one of the workflows and click on `Run worflow` button.
+
+Once the workflow is running, it will request a runner to ARC running on AKS cluster. Once this runner, a pod on Kubernetes, is allocated for the job, the workflow will run in there to completion. As we are using the Ephemeral runner approach, the pod running your workflow will be destroyed at the end and a new one will be created for your next workflow run.
 
 ## Removing resources
 
@@ -311,11 +356,12 @@ helm delete "${ARC_CONTROLLER_NAME}" -n "${NAMESPACE_ARC_CONTROLLER}" --wait
 kubectl delete -f ./install/arc-runners-set-pv-pvc.yaml --wait
 kubectl delete -f ./install/arc-runners-storage-class-files.yaml --wait
 
-# Delete Azure File share Storage key secret
+# Delete secrets
 kubectl delete secret azure-storage-secret -n arc-runners --wait
-
-# Delete GitHub App Connection Secret
 kubectl delete secret ${ARC_RUNNER_GITHUB_SECRET_NAME} -n arc-runners --wait
+
+# Delete container runner configmap pod spec
+kubectl delete -f .install/arc-runners-set-container-pod-spec.yaml --wait
 
 # Deleting Namespaces
 kubectl delete namespace ${NAMESPACE_ARC_RUNNERS}
