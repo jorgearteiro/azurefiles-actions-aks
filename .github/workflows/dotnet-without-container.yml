@@ -1,4 +1,4 @@
-name: Actions Runner on AKS - .NET Build
+name: .NET Build without container
 run-name: Run AKS .NET Build workflow on ${{ inputs.arc_runner_set_name}}
 on:
   workflow_dispatch: {
@@ -12,7 +12,7 @@ on:
   }
 
 jobs:
-  build-with-container:
+  build-without-container:
     runs-on: ${{ inputs.arc_runner_set_name}}
     env:
       DOTNET_INSTALL_DIR: "./.dotnet"
