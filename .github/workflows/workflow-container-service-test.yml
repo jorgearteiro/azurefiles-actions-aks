@@ -12,7 +12,7 @@ on:
   }
 
 jobs:
-  test-job:
+  test-container-job:
     runs-on: ${{ inputs.arc_runner_set_name}}
     container: ubuntu
     steps:
