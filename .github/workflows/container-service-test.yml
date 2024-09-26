@@ -1,4 +1,4 @@
-name: Workflow using Container definition test
+name: Container and Service Test
 run-name: Run Container test workflow on ${{ inputs.arc_runner_set_name}}
 on:
   workflow_dispatch: {

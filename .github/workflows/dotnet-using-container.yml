@@ -1,4 +1,4 @@
-name: Actions Runner on AKS - .NET Build using containers
+name: .NET Build using containers
 run-name: Run AKS .NET Build - Containers workflow on ${{ inputs.arc_runner_set_name}}
 on:
   workflow_dispatch: {
@@ -13,7 +13,7 @@ on:
 env:
   NUGET_PACKAGES: "/.nuget/packages"
 jobs:
-  build-with-container:
+  build-using-container:
     runs-on: ${{ inputs.arc_runner_set_name}}
     container:
       image: mcr.microsoft.com/dotnet/sdk:8.0
