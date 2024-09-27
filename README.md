@@ -93,7 +93,7 @@ Before you can use an Azure Files file share as a Kubernetes volume, you must cr
 1. Create a storage account using the `az storage account create` command with the `--sku` parameter. The following command creates a storage account using the `Premium_LRS` SKU.
 
     ```bash
-    az storage account create -n "${STORAGE_ACCOUNT_NAME}" -g "${AKS_AND_STORAGE_ACCOUNT_RG}" -l "${AKS_STORAGE_ACCOUNT_LOCATION}" --sku Premium_LRS
+    az storage account create -n "${STORAGE_ACCOUNT_NAME}" -g "${AKS_AND_STORAGE_ACCOUNT_RG}" -l "${AKS_STORAGE_ACCOUNT_LOCATION}" --sku Premium_LRS --kind FileStorage
     ```
 
 2. Export the connection string as an environment variable using the following command, which you use to create the file share.
@@ -102,10 +102,10 @@ Before you can use an Azure Files file share as a Kubernetes volume, you must cr
     export AZURE_STORAGE_CONNECTION_STRING=$(az storage account show-connection-string -n ${STORAGE_ACCOUNT_NAME} -g ${AKS_AND_STORAGE_ACCOUNT_RG} -o tsv)
     ```
 
-3. Create the premium file share using the `az storage share create` command. We are using `metadatacaching` as share name. If you change this name, you also have to change `arc-runners-set-pv.yaml` file to reflect this change.
+3. Create the 100Gb premium file share using the `az storage share create` command. We are using `metadatacaching` as share name. If you change this name, you also have to change `arc-runners-set-pv.yaml` file to reflect this change.
 
     ```bash
-    az storage share create -n metadatacaching --connection-string $AZURE_STORAGE_CONNECTION_STRING
+    az storage share create -n metadatacaching --quota 100 --connection-string $AZURE_STORAGE_CONNECTION_STRING
     ```
 
 ## Installing ARC Runners Scaleset Controler
@@ -271,7 +271,7 @@ template:
 For compatibility with GitHub Workflow container feature that allows you to run containers inside your pipeline, we are mounting a `container-podspec-volume` with the pod spec for the workflow pod created by ARC when running workflows with the container feature. This pod spec is mounted from a config map created on `arc-runners-set-container-pod-spec.yaml` file on the install folder. No changes are required.
 
 ```bash
-kubectl apply -f .install/arc-runners-set-container-pod-spec.yaml
+kubectl apply -f ./install/arc-runners-set-container-pod-spec.yaml
 ```
 
 ### ARC Runner Scaleset Helm Chart Parameters
@@ -360,7 +360,7 @@ kubectl delete secret azure-storage-secret -n arc-runners --wait
 kubectl delete secret ${ARC_RUNNER_GITHUB_SECRET_NAME} -n arc-runners --wait
 
 # Delete container runner configmap pod spec
-kubectl delete -f .install/arc-runners-set-container-pod-spec.yaml --wait
+kubectl delete -f ./install/arc-runners-set-container-pod-spec.yaml --wait
 
 # Deleting Namespaces
 kubectl delete namespace ${NAMESPACE_ARC_RUNNERS}
