@@ -1,6 +1,7 @@
 # Solution Architecture Tutorial Screenshots
 
-![Solution Architecture](./images/Tutorial_Solution_Architecture.png)
+## GitHub ARC controller and runners using Azure Files Architecture
+![Solution Architecture](./images/Tutorial_Solution_Architecture_Azure_Files.png)
 
 ![AKS Cluster](./images/1-GitHub_ARC_Runners_on_AKS_Cluster.png)
 
@@ -21,3 +22,6 @@
 ![Azure File share PVC - Persistent Volume Claim Premium to NUGET packages caching](./images/9-GitHub_ARC_Runners_on_AKS_PVCs.png)
 
 ![Azure File share Premium to NUGET packages caching](./images/10-GitHub_ARC_Runners_on_AKS_NUGET_FileShare.png)
+
+## GitHub ARC controller and runners using  Azure Files and Azure Container Storage Architecture
+![Solution Architecture](./images/Tutorial_Solution_Architecture_Container_Storage.png)
