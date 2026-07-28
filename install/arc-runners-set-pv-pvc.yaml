@@ -16,11 +16,10 @@ spec:
     driver: file.csi.azure.com
     volumeHandle: buildartifactscaching  # make sure this volumeid is unique for every identical share in the cluster
     volumeAttributes:
-      resourceGroup: metadata-agroves  # optional, only set this when storage account is not in the same resource group as node
+      resourceGroup: aks-files-actions    # optional, only set this when storage account is not in the same resource group as node
+      storageAccount: metadatacaching11   # storage account name; must have SMB OAuth enabled and shared key access disabled
       shareName: metadatacaching
-    nodeStageSecretRef:
-      name: azure-storage-secret
-      namespace: arc-runners
+      mountWithManagedIdentity: "true"     # keyless SMB mount using the node pool kubelet managed identity (no storage key/secret required)
   mountOptions:
     - dir_mode=0777
     - file_mode=0777

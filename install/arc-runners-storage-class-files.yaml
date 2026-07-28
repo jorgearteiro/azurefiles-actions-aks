@@ -18,6 +18,9 @@ mountOptions:
   - actimeo=30  
 parameters:
   skuName: Standard_LRS
+  storageAccount: metadatacaching11        # reuse the existing keyless storage account (SMB OAuth on, shared key access off)
+  resourceGroup: aks-files-actions         # resource group of the storage account above
+  mountWithManagedIdentity: "true"         # keyless SMB mount using the node pool kubelet managed identity
 ---
 kind: StorageClass
 apiVersion: storage.k8s.io/v1
@@ -39,3 +42,6 @@ mountOptions:
   - actimeo=30  
 parameters:
   skuName: Premium_LRS
+  storageAccount: metadatacaching11        # reuse the existing keyless storage account (SMB OAuth on, shared key access off)
+  resourceGroup: aks-files-actions         # resource group of the storage account above
+  mountWithManagedIdentity: "true"         # keyless SMB mount using the node pool kubelet managed identity

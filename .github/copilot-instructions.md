@@ -43,10 +43,17 @@ Deploying/validating the infrastructure requires a live AKS cluster and the CLI 
 ## Key conventions and cross-file wiring
 
 - **Fixed identifiers must stay consistent across files.** The share name `metadatacaching`,
-  the PV/PVC claim name `azurefile`, the secret name `azure-storage-secret`, the namespaces
+  the PV/PVC claim name `azurefile`, the storage account name, the namespaces
   `arc-runners` / `arc-systems`, the `hook-extension` ConfigMap, and the NuGet mount path
   `/home/runner/.nuget/` are referenced from multiple manifests and from `README.md`. Renaming
   one requires updating every referrer (README calls out several of these couplings explicitly).
+- **Storage auth is identity-based (keyless).** Azure Files SMB shares — the static NuGet cache
+  PV (`arc-runners-set-pv-pvc.yaml`) and the dynamic `github-azurefile*` storage classes
+  (`arc-runners-storage-class-files.yaml`) — are mounted with a user-assigned managed identity
+  (the AKS kubelet identity) via `mountWithManagedIdentity: "true"`. There is no `azure-storage-secret`
+  or storage key: the account has shared key access disabled and SMB OAuth enabled, the kubelet
+  identity holds `Storage File Data SMB MI Admin`, and the control-plane identity holds
+  `Storage Account Contributor` (for dynamic provisioning). Do not reintroduce key/secret auth.
 - **fsGroup / uid / gid values are load-bearing.** `fsGroup: 123` (the GitHub runner image group)
   and the SMB `mountOptions` (`uid=1001`, `gid=123`, `dir_mode=0777`, `nobrl`, `nosharesock`,
   `cache=strict`, `actimeo=30`) appear across the PV, storage classes, values file, and pod spec.
