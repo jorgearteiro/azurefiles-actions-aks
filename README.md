@@ -17,6 +17,38 @@ We are using 3 CLI tools: Azure CLI, Kubectl and Helm. If you are running in Clo
 * Install [Kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl-windows/#install-kubectl-binary-with-curl-on-windows)
 * Install [Helm](https://helm.sh/docs/intro/install/)
 
+## Register Azure resource providers
+
+This tutorial provisions AKS, a storage account, virtual networking and user-assigned managed identities. The corresponding Azure resource providers must be registered in your subscription before you begin. On a new subscription these are frequently `NotRegistered`, which causes the deployment commands to fail with misleading errors (for example, `az storage account create` returning `SubscriptionNotFound`).
+
+Register them once per subscription:
+
+```bash
+for provider in \
+    Microsoft.ContainerService \
+    Microsoft.Storage \
+    Microsoft.Network \
+    Microsoft.Compute \
+    Microsoft.ManagedIdentity; do
+  az provider register --namespace "${provider}"
+done
+```
+
+Registration runs asynchronously and can take a few minutes. Confirm every provider reports `Registered` before continuing:
+
+```bash
+for provider in \
+    Microsoft.ContainerService \
+    Microsoft.Storage \
+    Microsoft.Network \
+    Microsoft.Compute \
+    Microsoft.ManagedIdentity; do
+  echo "${provider}: $(az provider show --namespace "${provider}" --query registrationState -o tsv)"
+done
+```
+
+> The keyless (managed identity) Azure Files SMB mount used by this tutorial requires the Azure Files CSI driver **v1.34.0 or later** (included with current AKS releases) and a recent Azure CLI. Run `az upgrade` if the `--enable-smb-oauth` flag is not recognised.
+
 ## Defining parameters
 
 Make sure to replace the following mandatory placeholders :
@@ -49,18 +81,53 @@ ARC_CONTROLLER_NAME="arc-controller"
 NAMESPACE_ARC_RUNNERS="arc-runners"
 ARC_RUNNER_SCALESET_NAME="arc-runner-set"
 ARC_RUNNER_GITHUB_SECRET_NAME="arc-runner-github-secret"
+
+# user-assigned managed identities for keyless (identity-based) storage access
+CONTROLPLANE_IDENTITY_NAME="aks-files-controlplane-mi"
+KUBELET_IDENTITY_NAME="aks-files-kubelet-mi"
 ```
 
-## Create AKS - Azure Kubernetes Services Cluster
+## Create the resource group
 
 Please follow the [Quickstart: Deploy an Azure Kubernetes Services (AKS) cluster using Azure CLI](https://learn.microsoft.com/en-us/azure/aks/learn/quick-kubernetes-deploy-cli) to create the required Azure Kubernetes Services.
 
-Run the following command to create your AKS Cluster:
+Create the resource group that will hold the AKS cluster, the storage account and the managed identities:
 
 ```bash
 # Create Resource Group used by AKS and Storage account
 az group create --name "${AKS_AND_STORAGE_ACCOUNT_RG}" --location "${AKS_STORAGE_ACCOUNT_LOCATION}"
+```
 
+## Create user-assigned managed identities
+
+Instead of authenticating to Azure Storage with a storage account key, this solution uses a **user-assigned managed identity** that is attached to the AKS node pool (the kubelet identity). The Azure Files CSI driver uses this identity to mount SMB shares — both the static NuGet cache share and the dynamically-provisioned ephemeral shares — with no keys or Kubernetes secrets involved.
+
+We create two identities: one for the AKS **control plane** and one for the **kubelet** (nodes). Assigning our own kubelet identity at cluster creation is the most robust option — it survives AKS reconciliation and the CSI driver uses it automatically.
+
+```bash
+# Create the control-plane and kubelet (node) managed identities
+az identity create -g "${AKS_AND_STORAGE_ACCOUNT_RG}" -n "${CONTROLPLANE_IDENTITY_NAME}"
+az identity create -g "${AKS_AND_STORAGE_ACCOUNT_RG}" -n "${KUBELET_IDENTITY_NAME}"
+
+# Capture their resource IDs and principal IDs
+CONTROLPLANE_IDENTITY_ID=$(az identity show -g "${AKS_AND_STORAGE_ACCOUNT_RG}" -n "${CONTROLPLANE_IDENTITY_NAME}" --query id -o tsv)
+CONTROLPLANE_IDENTITY_PRINCIPAL_ID=$(az identity show -g "${AKS_AND_STORAGE_ACCOUNT_RG}" -n "${CONTROLPLANE_IDENTITY_NAME}" --query principalId -o tsv)
+KUBELET_IDENTITY_ID=$(az identity show -g "${AKS_AND_STORAGE_ACCOUNT_RG}" -n "${KUBELET_IDENTITY_NAME}" --query id -o tsv)
+KUBELET_IDENTITY_PRINCIPAL_ID=$(az identity show -g "${AKS_AND_STORAGE_ACCOUNT_RG}" -n "${KUBELET_IDENTITY_NAME}" --query principalId -o tsv)
+
+# The control-plane identity must be able to operate (assign) the kubelet identity
+az role assignment create \
+   --assignee-object-id "${CONTROLPLANE_IDENTITY_PRINCIPAL_ID}" \
+   --assignee-principal-type ServicePrincipal \
+   --role "Managed Identity Operator" \
+   --scope "${KUBELET_IDENTITY_ID}"
+```
+
+## Create AKS - Azure Kubernetes Services Cluster
+
+Run the following command to create your AKS Cluster, assigning the managed identities created above:
+
+```bash
 # Create AKS Cluster
 az aks create -g "${AKS_AND_STORAGE_ACCOUNT_RG}" -n "${AKS_CLUSTER_NAME}" \
        --os-sku AzureLinux \
@@ -72,6 +139,9 @@ az aks create -g "${AKS_AND_STORAGE_ACCOUNT_RG}" -n "${AKS_CLUSTER_NAME}" \
        --max-pods=100 \
        --network-plugin azure \
        --network-plugin-mode overlay \
+       --enable-managed-identity \
+       --assign-identity "${CONTROLPLANE_IDENTITY_ID}" \
+       --assign-kubelet-identity "${KUBELET_IDENTITY_ID}" \
        --generate-ssh-keys
 ```
 
@@ -93,22 +163,48 @@ To manage a Kubernetes cluster, use the Kubernetes command-line client, [kubectl
 
 Before you can use an Azure Files file share as a Kubernetes volume, you must create an Azure Storage account and the file share. We are using Azure file share Premium SMB with support for metadata caching. The minimal is 100 Gb for each share you create.
 
-1. Create a storage account using the `az storage account create` command with the `--sku` parameter. The following command creates a storage account using the `Premium_LRS` SKU.
+This solution uses **identity-based (keyless) authentication**, so the storage account is created with shared key access **disabled** and SMB OAuth **enabled**. Both the static NuGet cache share and the dynamically-provisioned per-job shares are created and mounted using Azure RBAC and the managed identity — no storage account keys are ever used.
+
+1. Create a storage account using the `az storage account create` command. Shared key access is disabled up front so keys can never be used.
 
     ```bash
-    az storage account create -n "${STORAGE_ACCOUNT_NAME}" -g "${AKS_AND_STORAGE_ACCOUNT_RG}" -l "${AKS_STORAGE_ACCOUNT_LOCATION}" --sku Premium_LRS --kind FileStorage
+    az storage account create -n "${STORAGE_ACCOUNT_NAME}" -g "${AKS_AND_STORAGE_ACCOUNT_RG}" -l "${AKS_STORAGE_ACCOUNT_LOCATION}" \
+        --sku Premium_LRS --kind FileStorage \
+        --allow-shared-key-access false
     ```
 
-2. Export the connection string as an environment variable using the following command, which you use to create the file share.
+2. Enable SMB OAuth on the storage account so the managed identity can obtain a Kerberos ticket to mount the share. (This requires a recent Azure CLI; upgrade with `az upgrade` if the flag is not recognised.)
 
     ```bash
-    export AZURE_STORAGE_CONNECTION_STRING=$(az storage account show-connection-string -n ${STORAGE_ACCOUNT_NAME} -g ${AKS_AND_STORAGE_ACCOUNT_RG} -o tsv)
+    az storage account update -n "${STORAGE_ACCOUNT_NAME}" -g "${AKS_AND_STORAGE_ACCOUNT_RG}" --enable-smb-oauth true
     ```
 
-3. Create the 100Gb premium file share using the `az storage share create` command. We are using `metadatacaching` as share name. If you change this name, you also have to change `arc-runners-set-pv.yaml` file to reflect this change.
+3. Create the 100Gb premium file share using the management-plane `az storage share-rm create` command, which uses Azure RBAC instead of a storage key. We are using `metadatacaching` as the share name. If you change this name, you also have to change the `arc-runners-set-pv-pvc.yaml` file to reflect this change.
 
     ```bash
-    az storage share create -n metadatacaching --quota 100 --connection-string $AZURE_STORAGE_CONNECTION_STRING
+    az storage share-rm create --storage-account "${STORAGE_ACCOUNT_NAME}" -g "${AKS_AND_STORAGE_ACCOUNT_RG}" --name metadatacaching --quota 100
+    ```
+
+4. Grant the **kubelet** managed identity the `Storage File Data SMB MI Admin` role on the storage account. This is the role required for managed-identity SMB mounts — other Azure Files data roles are not sufficient.
+
+    ```bash
+    STORAGE_ACCOUNT_ID=$(az storage account show -n "${STORAGE_ACCOUNT_NAME}" -g "${AKS_AND_STORAGE_ACCOUNT_RG}" --query id -o tsv)
+
+    az role assignment create \
+       --assignee-object-id "${KUBELET_IDENTITY_PRINCIPAL_ID}" \
+       --assignee-principal-type ServicePrincipal \
+       --role "Storage File Data SMB MI Admin" \
+       --scope "${STORAGE_ACCOUNT_ID}"
+    ```
+
+5. Grant the AKS **control-plane** managed identity the `Storage Account Contributor` role on the storage account. The Azure Files CSI driver uses the control-plane identity to create the dynamically-provisioned ephemeral shares (see the `github-azurefile` / `github-azurefile-premium` storage classes), and this role lets it do so without storage keys.
+
+    ```bash
+    az role assignment create \
+       --assignee-object-id "${CONTROLPLANE_IDENTITY_PRINCIPAL_ID}" \
+       --assignee-principal-type ServicePrincipal \
+       --role "Storage Account Contributor" \
+       --scope "${STORAGE_ACCOUNT_ID}"
     ```
 
 ## Installing ARC Runners Scaleset Controler
@@ -125,19 +221,12 @@ Please remove the `--version "0.9.3"` parameter to install the latest version. T
 
 ## Creating Kubernetes Secrets
 
-### Azure File Share Storage Key Secret
+### Create the runners namespace
 
-Azure Files requires a secret to be created on AKS with the Storage key used to connect the Azure File share from the AKS pod container.
+No storage secret is required — Azure Files shares are mounted using the kubelet managed identity (see the storage account steps above). Create the runners namespace that the manifests and GitHub App secret will use:
 
 ```bash
-STORAGE_KEY=$(az storage account keys list --resource-group ${AKS_AND_STORAGE_ACCOUNT_RG} --account-name ${STORAGE_ACCOUNT_NAME} --query "[0].value" -o tsv)
-
 kubectl create namespace "${NAMESPACE_ARC_RUNNERS}"
-
-kubectl create secret generic azure-storage-secret \
-   --namespace "${NAMESPACE_ARC_RUNNERS}" \
-   --from-literal=azurestorageaccountname=${STORAGE_ACCOUNT_NAME} \
-   --from-literal=azurestorageaccountkey=${STORAGE_KEY} 
 ```
 
 ### GitHub App Secret
@@ -199,11 +288,10 @@ Please customize `volumeAttributes` and any `namespaces` parameter on both PV - 
 
     ```yaml
     volumeAttributes:
-      resourceGroup: metadata-agroves  # optional, only set this when storage account is not in the same RG group as node
+      resourceGroup: aks-files-actions  # optional, only set this when storage account is not in the same RG group as node
+      storageAccount: metadatacaching11 # storage account name; must match the account created above
       shareName: metadatacaching
-    nodeStageSecretRef:
-      name: azure-storage-secret
-      namespace: arc-runners      
+      mountWithManagedIdentity: "true"   # keyless SMB mount using the kubelet managed identity (no secret required)
     ```
 
     ```bash
@@ -359,7 +447,6 @@ kubectl delete -f ./install/arc-runners-set-pv-pvc.yaml --wait
 kubectl delete -f ./install/arc-runners-storage-class-files.yaml --wait
 
 # Delete secrets
-kubectl delete secret azure-storage-secret -n arc-runners --wait
 kubectl delete secret ${ARC_RUNNER_GITHUB_SECRET_NAME} -n arc-runners --wait
 
 # Delete container runner configmap pod spec
